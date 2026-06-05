@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Image Labeling Tool</title>
+
+    <style>
+        /* Base Reset & Modern Background */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f8;
+            color: #333333;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        /* Container Card */
+        .container {
+            background: #ffffff;
+            max-width: 800px;
+            width: 100%;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        /* Typography */
+        h2 {
+            font-size: 24px;
+            color: #1a202c;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-weight: 600;
+        }
+
+        h3 {
+            font-size: 15px;
+            color: #718096;
+            background: #edf2f7;
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+
+        /* Image Display Area */
+        .image-wrapper {
+            background-color: #f7fafc;
+            border: 2px dashed #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+
+        img {
+            max-width: 100%;
+            max-height: 500px;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Grid Layout for Categories */
+        .buttons {
+            margin-top: 25px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        /* Category Button Styling */
+        .buttons button {
+            background-color: #ffffff;
+            color: #4a5568;
+            border: 1px solid #cbd5e0;
+            padding: 14px 20px;
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .buttons button:hover {
+            background-color: #edf2f7;
+            color: #2d3748;
+            border-color: #a0aec0;
+        }
+
+        .buttons button:active {
+            transform: scale(0.98);
+            background-color: #e2e8f0;
+        }
+
+        /* Action Footer Section */
+        .footer-actions {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #edf2f7;
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        /* Primary Export/Reset Button UI */
+        .btn-action {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            flex: 1;
+        }
+
+        .btn-export {
+            background-color: #3182ce;
+            color: white;
+            border: none;
+        }
+
+        .btn-export:hover {
+            background-color: #2b6cb0;
+        }
+
+        .btn-reset {
+            background-color: #fff;
+            color: #e53e3e;
+            border: 1px solid #fed7d7;
+        }
+
+        .btn-reset:hover {
+            background-color: #fff5f5;
+            border-color: #feb2b2;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>Image Annotation Tool</h2>
+
+        <div class="image-wrapper">
+            <img id="image" src="" alt="image">
+        </div>
+
+        <h3 id="filename"></h3>
+
+        <div class="buttons" id="buttons"></div>
+
+        <div class="footer-actions">
+            <button class="btn-action btn-export" onclick="exportCSV()">Export CSV</button>
+        </div>
+    </div>
+
+    <script>
+
+        //////////////////////////////////////////////////////
+        // CONFIG
+        //////////////////////////////////////////////////////
+
+        const SCRIPT_URL =
+            "https://script.google.com/macros/s/AKfycbzkLdQA3Vr7tIHq3ghtnv2MXj1Y9n2iThk6mlES8h7cXukuauHUCu0ohGawQJ6g-aZA/exec";
+
+        //////////////////////////////////////////////////////
+        // STATE
+        //////////////////////////////////////////////////////
+
+        let images = [];
+        let labeledFromSheet = [];
+
+        let annotations =
+            JSON.parse(localStorage.getItem("annotations")) || {};
+
+        //////////////////////////////////////////////////////
+        // LOAD IMAGES
+        //////////////////////////////////////////////////////
+
+        async function loadImages() {
+            try {
+                const res = await fetch("./images.json");
+
+                console.log("HTTP STATUS:", res.status);
+
+                const text = await res.text();
+                console.log("RAW JSON TEXT:", text);
+
+                images = JSON.parse(text);
+
+                console.log("PARSED IMAGES:", images);
+
+            } catch (err) {
+                console.error("IMAGE JSON LOAD FAILED:", err);
+            }
+        }
+
+        //////////////////////////////////////////////////////
+        // LOAD GOOGLE SHEET
+        //////////////////////////////////////////////////////
+
+        async function loadLabeledImages() {
+            try {
+                const res = await fetch(SCRIPT_URL);
+
+                const text = await res.text();
+                console.log("RAW RESPONSE:", text);
+
+                const data = JSON.parse(text);
+
+                labeledFromSheet = data;
+
+            } catch (err) {
+                console.log("ERROR:", err);
+                labeledFromSheet = [];
+            }
+        }
+
+        //////////////////////////////////////////////////////
+        // FILTER UNLABELED IMAGES
+        //////////////////////////////////////////////////////
+
+        function getUnlabeledImages() {
+            return images.filter(img =>
+                !(img in images) &&
+                !labeledFromSheet.includes(img)
+            );
+        }
+
+        //////////////////////////////////////////////////////
+        // LOAD NEXT IMAGE
+        //////////////////////////////////////////////////////
+
+        function loadNextImage() {
+
+            const unlabeled = getUnlabeledImages();
+            console.log("hello guys", unlabeled);
+
+            if (unlabeled.length === 0) {
+                document.getElementById("image").style.display = "none";
+                document.getElementById("filename").innerText =
+                    "All images labeled!";
+
+
+                return;
+            }
+
+            const imageName = unlabeled[0];
+            labeledFromSheet.push(imageName);
+
+            document.getElementById("image").src =
+                "images/" + imageName;
+
+            document.getElementById("filename").innerText =
+                imageName;
+
+        }
+
+        //////////////////////////////////////////////////////
+        // SAVE LABEL
+        //////////////////////////////////////////////////////
+
+        async function saveCategory(category) {
+
+            const imageName =
+                document.getElementById("filename").innerText;
+
+            annotations[imageName] = category;
+
+            localStorage.setItem(
+                "annotations",
+                JSON.stringify(annotations)
+            );
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        image_name: imageName,
+                        category: category
+                    })
+                });
+            } catch (err) {
+                alert("Failed to save to Google Sheet");
+                console.log(err);
+            }
+
+            loadNextImage();
+        }
+
+        //////////////////////////////////////////////////////
+        // BUTTONS
+        //////////////////////////////////////////////////////
+
+        const categories = [
+            "Religious Site",
+            "Pharmacy",
+            "Retail Outlet",
+            "Educational Institution",
+            "Bank & Financial",
+            "Healthcare",
+            "Station & Transport",
+            "Restaurant & Eatery",
+            "Hotel & Lodging",
+            "Other"
+        ];
+
+        function createButtons() {
+
+            const container =
+                document.getElementById("buttons");
+
+            categories.forEach(cat => {
+
+                const btn = document.createElement("button");
+                btn.innerText = cat;
+                btn.onclick = () => saveCategory(cat);
+                container.appendChild(btn);
+            });
+        }
+
+        //////////////////////////////////////////////////////
+        // EXPORT CSV
+        //////////////////////////////////////////////////////
+
+        function exportCSV() {
+
+            let csv = "image_name,category\n";
+
+            for (const img in annotations) {
+                csv += `${img},"${annotations[img]}"\n`;
+            }
+
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "annotations.csv";
+            a.click();
+        }
+
+        //////////////////////////////////////////////////////
+        // RESET
+        //////////////////////////////////////////////////////
+
+        function resetLabels() {
+            if (!confirm("Reset local labels?")) return;
+
+            localStorage.removeItem("annotations");
+            annotations = {};
+            loadNextImage();
+        }
+
+        //////////////////////////////////////////////////////
+        // INIT (FIXED)
+        //////////////////////////////////////////////////////
+
+        (async function init() {
+
+            createButtons();
+
+            await loadImages();
+            await loadLabeledImages();
+
+            loadNextImage();
+            console.log("IMAGES AFTER LOAD:", images);
+            console.log("SHEET DATA:", labeledFromSheet);
+            console.log("ANNOTATIONS:", annotations);
+
+        })();
+
+    </script>
+
+</body>
+
+</html>

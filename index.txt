@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Image Labeling Tool</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            text-align: center;
+            padding: 20px;
+        }
+
+        img {
+            max-width: 90%;
+            max-height: 600px;
+            border: 1px solid #ddd;
+        }
+
+        .buttons {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(2, 250px);
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Image Annotation Tool</h2>
+
+    <img id="image" src="" alt="image">
+
+    <h3 id="filename"></h3>
+
+    <div class="buttons" id="buttons"></div>
+
+    <br>
+
+    <button onclick="exportCSV()">Export CSV</button>
+
+    <script>
+
+        //////////////////////////////////////////////////////
+        // CONFIG
+        //////////////////////////////////////////////////////
+
+        const SCRIPT_URL =
+            "https://script.google.com/macros/s/AKfycbzkLdQA3Vr7tIHq3ghtnv2MXj1Y9n2iThk6mlES8h7cXukuauHUCu0ohGawQJ6g-aZA/exec";
+
+        //////////////////////////////////////////////////////
+        // STATE
+        //////////////////////////////////////////////////////
+
+        let images = [];
+        let labeledFromSheet = [];
+
+        let annotations =
+            JSON.parse(localStorage.getItem("annotations")) || {};
+
+        //////////////////////////////////////////////////////
+        // LOAD IMAGES
+        //////////////////////////////////////////////////////
+
+        async function loadImages() {
+            try {
+                const res = await fetch("./images.json");
+
+                console.log("HTTP STATUS:", res.status);
+
+                const text = await res.text();
+                console.log("RAW JSON TEXT:", text);
+
+                images = JSON.parse(text);
+
+                console.log("PARSED IMAGES:", images);
+
+            } catch (err) {
+                console.error("IMAGE JSON LOAD FAILED:", err);
+            }
+        }
+
+        //////////////////////////////////////////////////////
+        // LOAD GOOGLE SHEET
+        //////////////////////////////////////////////////////
+
+        async function loadLabeledImages() {
+            try {
+                const res = await fetch(SCRIPT_URL);
+
+                const text = await res.text();
+                console.log("RAW RESPONSE:", text);
+
+                const data = JSON.parse(text);
+
+                labeledFromSheet = data;
+
+            } catch (err) {
+                console.log("ERROR:", err);
+                labeledFromSheet = [];
+            }
+        }
+
+        //////////////////////////////////////////////////////
+        // FILTER UNLABELED IMAGES
+        //////////////////////////////////////////////////////
+
+        function getUnlabeledImages() {
+            return images.filter(img =>
+                !(img in images) &&
+                !labeledFromSheet.includes(img)
+            );
+        }
+
+        //////////////////////////////////////////////////////
+        // LOAD NEXT IMAGE
+        //////////////////////////////////////////////////////
+
+        function loadNextImage() {
+
+            const unlabeled = getUnlabeledImages();
+            console.log("hello guys", unlabeled);
+
+            if (unlabeled.length === 0) {
+                document.getElementById("image").style.display = "none";
+                document.getElementById("filename").innerText =
+                    "All images labeled!";
+
+
+                return;
+            }
+
+            const imageName = unlabeled[0];
+            labeledFromSheet.push(imageName);
+
+            document.getElementById("image").src =
+                "images/" + imageName;
+
+            document.getElementById("filename").innerText =
+                imageName;
+
+        }
+
+        //////////////////////////////////////////////////////
+        // SAVE LABEL
+        //////////////////////////////////////////////////////
+
+        async function saveCategory(category) {
+
+            const imageName =
+                document.getElementById("filename").innerText;
+
+            annotations[imageName] = category;
+
+            localStorage.setItem(
+                "annotations",
+                JSON.stringify(annotations)
+            );
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        image_name: imageName,
+                        category: category
+                    })
+                });
+            } catch (err) {
+                alert("Failed to save to Google Sheet");
+                console.log(err);
+            }
+
+            loadNextImage();
+        }
+
+        //////////////////////////////////////////////////////
+        // BUTTONS
+        //////////////////////////////////////////////////////
+
+        const categories = [
+            "Religious Site",
+            "Pharmacy",
+            "Retail Outlet",
+            "Educational Institution",
+            "Bank & Financial",
+            "Healthcare",
+            "Station & Transport",
+            "Restaurant & Eatery",
+            "Hotel & Lodging",
+            "Other"
+        ];
+
+        function createButtons() {
+
+            const container =
+                document.getElementById("buttons");
+
+            categories.forEach(cat => {
+
+                const btn = document.createElement("button");
+                btn.innerText = cat;
+                btn.onclick = () => saveCategory(cat);
+                container.appendChild(btn);
+            });
+        }
+
+        //////////////////////////////////////////////////////
+        // EXPORT CSV
+        //////////////////////////////////////////////////////
+
+        function exportCSV() {
+
+            let csv = "image_name,category\n";
+
+            for (const img in annotations) {
+                csv += `${img},"${annotations[img]}"\n`;
+            }
+
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "annotations.csv";
+            a.click();
+        }
+
+        //////////////////////////////////////////////////////
+        // RESET
+        //////////////////////////////////////////////////////
+
+        function resetLabels() {
+            if (!confirm("Reset local labels?")) return;
+
+            localStorage.removeItem("annotations");
+            annotations = {};
+            loadNextImage();
+        }
+
+        //////////////////////////////////////////////////////
+        // INIT (FIXED)
+        //////////////////////////////////////////////////////
+
+        (async function init() {
+
+            createButtons();
+
+            await loadImages();
+            await loadLabeledImages();
+
+            loadNextImage();
+            console.log("IMAGES AFTER LOAD:", images);
+            console.log("SHEET DATA:", labeledFromSheet);
+            console.log("ANNOTATIONS:", annotations);
+
+        })();
+
+    </script>
+
+</body>
+
+</html>
