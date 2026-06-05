@@ -145,6 +145,16 @@
             background-color: #fff5f5;
             border-color: #feb2b2;
         }
+
+        .btn-skip {
+            background-color: #fff;
+            color: #2d3748;
+            border: 1px solid #cbd5e0;
+        }
+
+        .btn-skip:hover {
+            background-color: #edf2f7;
+        }
     </style>
 </head>
 
@@ -162,6 +172,7 @@
         <div class="buttons" id="buttons"></div>
 
         <div class="footer-actions">
+            <button class="btn-action btn-skip" onclick="skipImage()">Skip</button>
             <button class="btn-action btn-export" onclick="exportCSV()">Export CSV</button>
         </div>
     </div>
@@ -237,6 +248,9 @@
                 !(img in images) &&
                 !labeledFromSheet.includes(img)
             );
+        }
+        function skipImage() {
+            loadNextImage();
         }
 
         //////////////////////////////////////////////////////
